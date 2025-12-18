@@ -117,18 +117,12 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, tol=1e-6):
         # Ensure valid range
         x_new = jnp.clip(x_new, 0, 1)
 
-        # Check convergence
-        rel_change = jnp.linalg.norm(x_new - x) / (jnp.linalg.norm(x) + 1e-8)
-
         # FISTA acceleration
         t_new = (1 + jnp.sqrt(1 + 4 * t**2)) / 2
         y = x_new + ((t - 1) / t_new) * (x_new - x)
 
         x = x_new
         t = t_new
-
-        if rel_change < tol:
-            break
 
     return x
 
