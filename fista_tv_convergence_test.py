@@ -68,7 +68,7 @@ def compute_objective(x, measurements, mask, lambda_tv):
 
 
 def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, max_iter=1000, 
-                              tv_prox_steps=50, tv_prox_lr=0.01, print_every=10):
+                              tv_prox_steps=50, tv_prox_lr=0.01, print_every=10, debug=False):
     """FISTA-TV with objective value and ground truth PSNR monitoring."""
     
     # Forward and adjoint operators
