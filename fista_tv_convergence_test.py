@@ -79,7 +79,7 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
     
     def adjoint(y):
         N = mask.shape[-2] * mask.shape[-1]
-        return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
+        return (ifft(mask * y, center=True, norm=None) * jnp.sqrt(N)).real
     
     def compute_psnr(x, gt):
         """Compute PSNR against ground truth.
