@@ -83,11 +83,16 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, tol=1e-6):
     def forward(x):
         # Convert real image to complex for FFT
         x_complex = x.astype(jnp.complex64)
-        return mask * fft(x_complex, center=True, norm="ortho")
+        # Use norm=None (default) for old JAX compatibility
+        # Scale by sqrt(N) to match ortho normalization
+        N = x.shape[-2] * x.shape[-1]
+        return mask * fft(x_complex, center=True, norm=None) / jnp.sqrt(N)
 
     # Adjoint operator: A^T(y) = IFFT(mask * y)
     def adjoint(y):
-        return ifft(mask * y, center=True, norm="ortho").real
+        # Use norm=None and scale accordingly
+        N = mask.shape[-2] * mask.shape[-1]
+        return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
 
     # Initialize with adjoint of measurements
     x = adjoint(measurements)
@@ -173,7 +178,9 @@ def get_fista_tv_solver(config, shape, inverse_scaler):
         def forward_single(x):
             """Apply forward operator to single image."""
             x_complex = x.astype(jnp.complex64)
-            return mask_template * fft(x_complex, center=True, norm="ortho")
+            # Use norm=None for old JAX compatibility, scale manually
+            N = x.shape[-2] * x.shape[-1]
+            return mask_template * fft(x_complex, center=True, norm=None) / jnp.sqrt(N)
 
         # Run FISTA-TV on each image
         def solve_single_image(single_img):
