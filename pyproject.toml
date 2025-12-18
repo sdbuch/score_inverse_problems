@@ -26,6 +26,7 @@ dependencies = [
 ]
 
 [tool.uv]
+prerelease = "allow"
 find-links = [
     "https://storage.googleapis.com/jax-releases/jax_releases.html",
     "https://storage.googleapis.com/jax-releases/libtpu_releases.html"
