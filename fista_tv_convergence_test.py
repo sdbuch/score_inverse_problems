@@ -67,9 +67,9 @@ def compute_objective(x, measurements, mask, lambda_tv):
     return objective, data_fidelity, tv_value
 
 
-def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000, 
+def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, max_iter=1000, 
                               tv_prox_steps=50, tv_prox_lr=0.01, print_every=10):
-    """FISTA-TV with objective value monitoring."""
+    """FISTA-TV with objective value and ground truth PSNR monitoring."""
     
     # Forward and adjoint operators
     def forward(x):
@@ -81,6 +81,13 @@ def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000,
         N = mask.shape[-2] * mask.shape[-1]
         return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
     
+    def compute_psnr(x, gt):
+        """Compute PSNR against ground truth."""
+        mse = float(jnp.mean((x - gt) ** 2))
+        if mse < 1e-10:
+            return 100.0  # Perfect reconstruction
+        return -10 * np.log10(mse)
+    
     # Initialize
     x = adjoint(measurements)
     x = jnp.clip(x, 0, 1)
@@ -91,9 +98,10 @@ def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000,
     objectives = []
     data_fidelities = []
     tv_values = []
+    psnrs = []
     
-    print(f"\n{'Iter':>6} {'Objective':>15} {'Data Fidelity':>15} {'TV':>12} {'Rel Change':>12}")
-    print("-" * 70)
+    print(f"\n{'Iter':>6} {'Objective':>15} {'Data Fidelity':>15} {'TV':>12} {'GT PSNR':>10} {'Rel Change':>12}")
+    print("-" * 90)
     
     for i in range(max_iter):
         # FISTA step
@@ -102,12 +110,15 @@ def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000,
         x_new = tv_prox_gd(x_new, lambda_tv / L, num_steps=tv_prox_steps, step_size=tv_prox_lr)
         x_new = jnp.clip(x_new, 0, 1)
         
-        # Compute objective
+        # Compute metrics
         if i % print_every == 0 or i == max_iter - 1:
             obj, df, tv = compute_objective(x_new, measurements, mask, lambda_tv)
+            psnr = compute_psnr(x_new, ground_truth)
+            
             objectives.append(float(obj))
             data_fidelities.append(float(df))
             tv_values.append(float(tv))
+            psnrs.append(psnr)
             
             # Compute relative change
             if i > 0:
@@ -115,7 +126,7 @@ def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000,
             else:
                 rel_change = float('inf')
             
-            print(f"{i:6d} {float(obj):15.6f} {float(df):15.6f} {float(tv):12.6f} {rel_change:12.6e}")
+            print(f"{i:6d} {float(obj):15.6f} {float(df):15.6f} {float(tv):12.6f} {psnr:10.2f} {rel_change:12.6e}")
         
         # FISTA acceleration
         t_new = (1 + jnp.sqrt(1 + 4 * t**2)) / 2
@@ -123,7 +134,7 @@ def fista_tv_with_monitoring(measurements, mask, lambda_tv=0.001, max_iter=1000,
         x = x_new
         t = t_new
     
-    return x, objectives, data_fidelities, tv_values
+    return x, objectives, data_fidelities, tv_values, psnrs
 
 
 def main():
@@ -176,10 +187,18 @@ def main():
     N = test_img.shape[-2] * test_img.shape[-1]
     measurements = mask * fft(img_complex, center=True, norm=None) / jnp.sqrt(N)
     
+    # Compute initial PSNR (zero-filled reconstruction)
+    N = test_img.shape[-2] * test_img.shape[-1]
+    zero_filled = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    zero_filled = jnp.clip(zero_filled, 0, 1)
+    zero_filled_mse = float(jnp.mean((zero_filled - test_img_jax) ** 2))
+    zero_filled_psnr = -10 * np.log10(zero_filled_mse)
+    print(f"Initial (zero-filled) PSNR: {zero_filled_psnr:.2f} dB")
+    
     # Run FISTA-TV with monitoring
     print("\nRunning FISTA-TV...\n")
-    reconstructed, objectives, data_fidelities, tv_values = fista_tv_with_monitoring(
-        measurements, mask, 
+    reconstructed, objectives, data_fidelities, tv_values, psnrs = fista_tv_with_monitoring(
+        measurements, mask, test_img_jax,
         lambda_tv=args.lambda_tv,
         max_iter=args.max_iter,
         tv_prox_steps=args.tv_prox_steps,
@@ -188,9 +207,9 @@ def main():
     )
     
     # Convergence analysis
-    print("\n" + "=" * 70)
+    print("\n" + "=" * 90)
     print("Convergence Analysis")
-    print("=" * 70)
+    print("=" * 90)
     
     if len(objectives) > 1:
         final_rel_change = abs(objectives[-1] - objectives[-2]) / (abs(objectives[-2]) + 1e-8)
@@ -210,17 +229,27 @@ def main():
     
     # Compute reconstruction quality
     mse = float(jnp.mean((reconstructed - test_img_jax) ** 2))
-    psnr = -10 * np.log10(mse)
-    print(f"\nReconstruction quality:")
-    print(f"  MSE:  {mse:.6f}")
-    print(f"  PSNR: {psnr:.2f} dB")
+    psnr = psnrs[-1]  # Use the last computed PSNR
+    print(f"\nReconstruction quality vs Ground Truth:")
+    print(f"  Initial (zero-filled): {zero_filled_psnr:.2f} dB")
+    print(f"  Final (FISTA-TV):      {psnr:.2f} dB")
+    print(f"  Improvement:           {psnr - zero_filled_psnr:.2f} dB")
     
-    print("\n" + "=" * 70)
+    # PSNR progression
+    if len(psnrs) > 1:
+        psnr_gain = psnrs[-1] - psnrs[0]
+        print(f"\nPSNR progression during optimization:")
+        print(f"  Iteration 0:    {psnrs[0]:.2f} dB")
+        print(f"  Iteration {(len(psnrs)-1)*args.print_every}: {psnrs[-1]:.2f} dB")
+        print(f"  Total gain:     {psnr_gain:.2f} dB")
+    
+    print("\n" + "=" * 90)
     print("Tip: If not converged, try:")
     print("  - Increase --max_iter (e.g., 2000)")
     print("  - Increase --tv_prox_steps (e.g., 100)")
     print("  - Adjust --lambda_tv if objective seems stuck")
-    print("=" * 70)
+    print("\nTip: Watch the GT PSNR column to see reconstruction quality improve!")
+    print("=" * 90)
 
 
 if __name__ == '__main__':
