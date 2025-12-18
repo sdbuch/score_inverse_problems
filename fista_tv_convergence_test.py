@@ -101,16 +101,17 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
     L = 1.0
     
     # Debug: Check initial state
-    print(f"\n[DEBUG] Initial state (after adjoint + clip):")
-    print(f"  x range: min={float(x.min()):.4f}, max={float(x.max()):.4f}, mean={float(x.mean()):.4f}")
-    initial_psnr = compute_psnr(x, ground_truth)
-    print(f"  Initial PSNR: {initial_psnr:.2f} dB")
-    
-    # Check if forward(x) ≈ measurements
-    forward_x = forward(x)
-    residual = forward_x - measurements
-    residual_norm = float(jnp.sqrt(jnp.mean(jnp.abs(residual)**2)))
-    print(f"  Forward-measurements residual norm: {residual_norm:.6f}")
+    if debug:
+        print(f"\n[DEBUG] Initial state (after adjoint + clip):")
+        print(f"  x range: min={float(x.min()):.4f}, max={float(x.max()):.4f}, mean={float(x.mean()):.4f}")
+        initial_psnr = compute_psnr(x, ground_truth)
+        print(f"  Initial PSNR: {initial_psnr:.2f} dB")
+        
+        # Check if forward(x) ≈ measurements
+        forward_x = forward(x)
+        residual = forward_x - measurements
+        residual_norm = float(jnp.sqrt(jnp.mean(jnp.abs(residual)**2)))
+        print(f"  Forward-measurements residual norm: {residual_norm:.6f}")
     
     objectives = []
     data_fidelities = []
@@ -125,7 +126,7 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
         grad = adjoint(forward(y) - measurements)
         
         # Debug first iteration
-        if i == 0:
+        if debug and i == 0:
             print(f"\n[DEBUG] First iteration breakdown:")
             print(f"  y (input): min={float(y.min()):.4f}, max={float(y.max()):.4f}, mean={float(y.mean()):.4f}")
             print(f"  forward(y) residual: {float(jnp.sqrt(jnp.mean(jnp.abs(forward(y) - measurements)**2))):.6f}")
@@ -133,17 +134,17 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
         
         x_new = y - (1.0 / L) * grad
         
-        if i == 0:
+        if debug and i == 0:
             print(f"  after gradient step: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
             
         x_new = tv_prox_gd(x_new, lambda_tv / L, num_steps=tv_prox_steps, step_size=tv_prox_lr)
         
-        if i == 0:
+        if debug and i == 0:
             print(f"  after TV prox: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
             
         x_new = jnp.clip(x_new, 0, 1)
         
-        if i == 0:
+        if debug and i == 0:
             print(f"  after clip: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
             print(f"  PSNR: {compute_psnr(x_new, ground_truth):.2f} dB\n")
         
@@ -183,6 +184,7 @@ def main():
     parser.add_argument('--n_projections', type=int, default=30, help='Number of k-space lines (acceleration)')
     parser.add_argument('--image_size', type=int, default=240, help='Image size')
     parser.add_argument('--print_every', type=int, default=10, help='Print frequency')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output')
     args = parser.parse_args()
     
     print("=" * 70)
@@ -223,13 +225,14 @@ def main():
     img_complex = test_img_jax.astype(jnp.complex64)
     N = test_img.shape[-2] * test_img.shape[-1]
     
-    # Debug: Check FFT output
+    # Create measurements
     fft_img = fft(img_complex, center=True, norm=None) / jnp.sqrt(N)
-    print(f"  FFT output: min={float(jnp.abs(fft_img).min()):.4f}, max={float(jnp.abs(fft_img).max()):.4f}, mean={float(jnp.abs(fft_img).mean()):.4f}")
-    print(f"  Mask: min={float(mask.min()):.4f}, max={float(mask.max()):.4f}, sum={int(mask.sum())}, nonzero={int(jnp.count_nonzero(mask))}")
-    
     measurements = mask * fft_img
-    print(f"  Measurements (after mask): min={float(jnp.abs(measurements).min()):.4f}, max={float(jnp.abs(measurements).max()):.4f}, nonzero={int(jnp.count_nonzero(measurements))}")
+    
+    if args.debug:
+        print(f"  FFT output: min={float(jnp.abs(fft_img).min()):.4f}, max={float(jnp.abs(fft_img).max()):.4f}, mean={float(jnp.abs(fft_img).mean()):.4f}")
+        print(f"  Mask: min={float(mask.min()):.4f}, max={float(mask.max()):.4f}, sum={int(mask.sum())}, nonzero={int(jnp.count_nonzero(mask))}")
+        print(f"  Measurements (after mask): min={float(jnp.abs(measurements).min()):.4f}, max={float(jnp.abs(measurements).max()):.4f}, nonzero={int(jnp.count_nonzero(measurements))}")
     
     # Test forward/adjoint operator consistency
     print("\nTesting forward/adjoint operator consistency...")
@@ -268,12 +271,13 @@ def main():
     zero_filled = (ifft(mask * measurements, center=True, norm=None) * jnp.sqrt(N)).real
     zero_filled = jnp.clip(zero_filled, 0, 1)
     
-    print(f"  Zero-filled: min={float(zero_filled.min()):.4f}, max={float(zero_filled.max()):.4f}, mean={float(zero_filled.mean()):.4f}")
-    
     zero_filled_mse = float(jnp.mean((zero_filled - test_img_jax) ** 2))
     zero_filled_psnr = -10 * np.log10(zero_filled_mse) if zero_filled_mse > 0 else 100.0
     print(f"\nInitial (zero-filled) PSNR: {zero_filled_psnr:.2f} dB")
-    print(f"  MSE: {zero_filled_mse:.6f}")
+    
+    if args.debug:
+        print(f"  Zero-filled: min={float(zero_filled.min()):.4f}, max={float(zero_filled.max()):.4f}, mean={float(zero_filled.mean()):.4f}")
+        print(f"  MSE: {zero_filled_mse:.6f}")
     
     # Run FISTA-TV with monitoring
     print("\nRunning FISTA-TV...\n")
@@ -283,7 +287,8 @@ def main():
         max_iter=args.max_iter,
         tv_prox_steps=args.tv_prox_steps,
         tv_prox_lr=args.tv_prox_lr,
-        print_every=args.print_every
+        print_every=args.print_every,
+        debug=args.debug
     )
     
     # Convergence analysis
@@ -308,14 +313,17 @@ def main():
     print(f"  TV term:       {tv_values[-1]:.6f}")
     
     # Compute reconstruction quality
-    print(f"\nFinal reconstruction range: min={float(reconstructed.min()):.4f}, max={float(reconstructed.max()):.4f}, mean={float(reconstructed.mean()):.4f}")
-    
     mse = float(jnp.mean((reconstructed - test_img_jax) ** 2))
     psnr = psnrs[-1]  # Use the last computed PSNR
     print(f"\nReconstruction quality vs Ground Truth:")
-    print(f"  Initial (zero-filled): {zero_filled_psnr:.2f} dB (MSE: {zero_filled_mse:.6f})")
-    print(f"  Final (FISTA-TV):      {psnr:.2f} dB (MSE: {mse:.6f})")
-    print(f"  Improvement:           {psnr - zero_filled_psnr:.2f} dB")
+    print(f"  Initial (zero-filled): {zero_filled_psnr:.2f} dB")
+    print(f"  Final (FISTA-TV):      {psnr:.2f} dB")
+    print(f"  Improvement:           {psnr - zero_filled_psnr:+.2f} dB")
+    
+    if args.debug:
+        print(f"\nFinal reconstruction range: min={float(reconstructed.min()):.4f}, max={float(reconstructed.max()):.4f}, mean={float(reconstructed.mean()):.4f}")
+        print(f"  Zero-filled MSE: {zero_filled_mse:.6f}")
+        print(f"  Final MSE:       {mse:.6f}")
     
     # Check if something went wrong
     if psnr < zero_filled_psnr:
