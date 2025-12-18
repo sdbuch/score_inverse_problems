@@ -14,6 +14,7 @@ dependencies = [
     "tensorflow-probability",
     "tensorflow-addons",
     "absl-py>=0.12.0",
+    "numpy>=1.20,<2.0",
     "flax @ git+https://github.com/google/flax.git@8b2e56e93602ff9fcd62647f28b8145e0e0c10a8",
     "jax==0.3.25",
     "jaxlib==0.3.25",
