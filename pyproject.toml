@@ -18,7 +18,7 @@ dependencies = [
     "scipy>=1.7.0,<1.9.0",
     "typing-extensions>=4.0.0",
     "flax @ git+https://github.com/google/flax.git@8b2e56e93602ff9fcd62647f28b8145e0e0c10a8",
-    "jax[tpu]==0.2.28",
+    "jax[tpu]==0.3.5",
     "scikit-image",
     "odl",
     "piq",

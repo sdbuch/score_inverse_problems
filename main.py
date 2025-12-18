@@ -15,6 +15,9 @@
 
 """Training and evaluation"""
 
+# Patch for old Flax + new JAX compatibility
+import patch_flax
+
 import run_lib
 from absl import app
 from absl import flags
