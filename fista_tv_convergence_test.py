@@ -161,7 +161,7 @@ def main():
     print(f"  max_iter:        {args.max_iter}")
     print(f"  tv_prox_steps:   {args.tv_prox_steps}")
     print(f"  tv_prox_lr:      {args.tv_prox_lr}")
-    print(f"  n_projections:   {args.n_projections} ({args.image_size / args.n_projections:.1f}× acceleration)")
+    print(f"  n_projections:   {args.n_projections} ({args.image_size / args.n_projections:.1f}x acceleration)")
     print("=" * 70)
     
     # Load one BraTS test image
@@ -209,7 +209,7 @@ def main():
     print(f"  Forward-adjoint PSNR: {-10 * np.log10(forward_adjoint_error) if forward_adjoint_error > 0 else 100.0:.2f} dB")
     
     if forward_adjoint_error > 0.01:
-        print("  ??  WARNING: Large forward-adjoint error! Operators may be inconsistent.")
+        print("  [!] WARNING: Large forward-adjoint error! Operators may be inconsistent.")
     
     # Debugging: Check data ranges
     print(f"\nData range checks:")
@@ -250,11 +250,11 @@ def main():
         
         # Check if converged
         if final_rel_change < 1e-6:
-            print("? CONVERGED (rel_change < 1e-6)")
+            print("[OK] CONVERGED (rel_change < 1e-6)")
         elif final_rel_change < 1e-4:
-            print("? Nearly converged (rel_change < 1e-4)")
+            print("[~] Nearly converged (rel_change < 1e-4)")
         else:
-            print("? NOT CONVERGED - Consider increasing max_iter")
+            print("[X] NOT CONVERGED - Consider increasing max_iter")
     
     print(f"\nFinal objective value: {objectives[-1]:.6f}")
     print(f"  Data fidelity: {data_fidelities[-1]:.6f}")
@@ -272,11 +272,11 @@ def main():
     
     # Check if something went wrong
     if psnr < zero_filled_psnr:
-        print("\n??  WARNING: FISTA-TV worse than zero-filled! Something may be wrong.")
-        print("     Possible issues:")
-        print("     - lambda_tv too high (oversmoothing)")
-        print("     - TV prox not converging (try more tv_prox_steps)")
-        print("     - Bug in forward/adjoint operators")
+        print("\n[!] WARNING: FISTA-TV worse than zero-filled! Something may be wrong.")
+        print("    Possible issues:")
+        print("    - lambda_tv too high (oversmoothing)")
+        print("    - TV prox not converging (try more tv_prox_steps)")
+        print("    - Bug in forward/adjoint operators")
     
     # PSNR progression
     if len(psnrs) > 1:
