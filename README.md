@@ -62,6 +62,21 @@ CUDA_VISIBLE_DEVICES=6 python main.py \
 
 **Note:** The code automatically uses all visible GPUs via JAX's `pmap`. Use `CUDA_VISIBLE_DEVICES` to control which GPUs are used.
 
+### 5. Running FISTA-TV Classical Baseline
+
+A classical optimization baseline (FISTA-TV) is also available for comparison with learning-based methods:
+
+```bash
+# Run FISTA-TV on BraTS MRI reconstruction (8× acceleration)
+python main.py \
+  --config=configs/ve/brats_fista_tv.py \
+  --workdir=./exp/brats_fista_tv \
+  --mode=eval \
+  --eval_folder=eval_fista_tv
+```
+
+This baseline does not require a pretrained model checkpoint and uses classical total variation regularization.
+
 --------------------
 
 ### Dependencies
@@ -83,11 +98,12 @@ main.py:
 ```
 
 * `config` is the path to the config file. Our prescribed config files are provided in `configs/`. They are formatted
-  according to [`ml_collections`](https://github.com/google/ml_collections) and should be mostly self-explanatory. `sampling.cs_solver` specifies which sampling method we use for solving the inverse problems. They have 4 possible values:
+  according to [`ml_collections`](https://github.com/google/ml_collections) and should be mostly self-explanatory. `sampling.cs_solver` specifies which sampling method we use for solving the inverse problems. They have 5 possible values:
     * `baseline`: The "Score SDE" approach, as in the original paper [Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)
     * `langevin`: The "Langevin" approach, similar to the method in [Robust Compressed Sensing MRI with Deep Generative Priors](https://arxiv.org/abs/2108.01368) 
     * `langevin_projection`: The "ALD + Ours" approach, used to demonstrate advantages of the projection-based conditioning method compared to prior work.
     * `projection`: Our full method.
+    * `fista_tv`: Classical FISTA-TV optimization baseline (learning-free).
 
 * `workdir` is the path that stores all artifacts of one experiment, like checkpoints, samples, and evaluation results.
 

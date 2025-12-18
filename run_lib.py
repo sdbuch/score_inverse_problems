@@ -268,44 +268,57 @@ def evaluate(config,
   scaler = datasets.get_data_scaler(config)
   inverse_scaler = datasets.get_data_inverse_scaler(config)
 
-  # Initialize model
-  rng, model_rng = jax.random.split(rng)
-  score_model, init_model_state, initial_params = mutils.init_model(model_rng, config)
-  optimizer = losses.get_optimizer(config).create(initial_params)
-  state = mutils.State(step=0, optimizer=optimizer, lr=config.optim.lr,
-                       model_state=init_model_state,
-                       ema_rate=config.model.ema_rate,
-                       params_ema=initial_params,
-                       rng=rng)  # pytype: disable=wrong-keyword-args
+  # Check if using classical solver (no model needed)
+  use_classical_solver = config.sampling.cs_solver.lower() in ['fista_tv']
+  
+  if not use_classical_solver:
+    # Initialize model (only for learning-based methods)
+    rng, model_rng = jax.random.split(rng)
+    score_model, init_model_state, initial_params = mutils.init_model(model_rng, config)
+    optimizer = losses.get_optimizer(config).create(initial_params)
+    state = mutils.State(step=0, optimizer=optimizer, lr=config.optim.lr,
+                         model_state=init_model_state,
+                         ema_rate=config.model.ema_rate,
+                         params_ema=initial_params,
+                         rng=rng)  # pytype: disable=wrong-keyword-args
 
-  checkpoint_dir = os.path.join(workdir, "checkpoints")
+    checkpoint_dir = os.path.join(workdir, "checkpoints")
 
-  # Setup SDEs
-  if config.training.sde.lower() == 'vpsde':
-    sde = sde_lib.VPSDE(beta_min=config.model.beta_min, beta_max=config.model.beta_max, N=config.model.num_scales)
-    sampling_eps = 1e-3
-  elif config.training.sde.lower() == 'subvpsde':
-    sde = sde_lib.subVPSDE(beta_min=config.model.beta_min, beta_max=config.model.beta_max, N=config.model.num_scales)
-    sampling_eps = 1e-3
-  elif config.training.sde.lower() == 'vesde':
-    sde = sde_lib.VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=config.model.num_scales)
-    sampling_eps = 1e-5
+    # Setup SDEs
+    if config.training.sde.lower() == 'vpsde':
+      sde = sde_lib.VPSDE(beta_min=config.model.beta_min, beta_max=config.model.beta_max, N=config.model.num_scales)
+      sampling_eps = 1e-3
+    elif config.training.sde.lower() == 'subvpsde':
+      sde = sde_lib.subVPSDE(beta_min=config.model.beta_min, beta_max=config.model.beta_max, N=config.model.num_scales)
+      sampling_eps = 1e-3
+    elif config.training.sde.lower() == 'vesde':
+      sde = sde_lib.VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=config.model.num_scales)
+      sampling_eps = 1e-5
+    else:
+      raise NotImplementedError(f"SDE {config.training.sde} unknown.")
+
+    state = checkpoints.restore_checkpoint(checkpoint_dir, state, step=config.eval.ckpt_id)
+    pstate = flax.jax_utils.replicate(state)
   else:
-    raise NotImplementedError(f"SDE {config.training.sde} unknown.")
+    # Classical solvers don't need model, SDE, or checkpoints
+    score_model = None
+    sde = None
+    sampling_eps = None
+    state = None
+    pstate = None
 
   sampling_shape = (config.eval.batch_size // jax.device_count(),
                     config.data.image_size, config.data.image_size,
                     config.data.num_channels)
 
   cs_solver = cs.get_cs_solver(config, sde, score_model, sampling_shape, inverse_scaler, eps=sampling_eps)
-  state = checkpoints.restore_checkpoint(checkpoint_dir, state, step=config.eval.ckpt_id)
-  pstate = flax.jax_utils.replicate(state)
 
   hyper_params = {
     'projection': [config.sampling.coeff, config.sampling.snr],
     'langevin_projection': [config.sampling.coeff, config.sampling.snr],
     'langevin': [config.sampling.projection_sigma_rate, config.sampling.snr],
-    'baseline': [config.sampling.projection_sigma_rate, config.sampling.snr]
+    'baseline': [config.sampling.projection_sigma_rate, config.sampling.snr],
+    'fista_tv': [config.sampling.lambda_tv]  # TV regularization parameter
   }[config.sampling.cs_solver]
 
   per_host_batch_size = config.eval.batch_size // jax.host_count()

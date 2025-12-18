@@ -564,6 +564,10 @@ def get_cs_solver(config, sde, model, shape, inverse_scaler, eps=1e-5):
                                        continuous=config.training.continuous,
                                        denoise=config.sampling.noise_removal,
                                        eps=eps)
+  elif cs_solver.lower() == 'fista_tv':
+    # Classical optimization baseline - no model needed
+    from fista_tv import get_fista_tv_solver
+    sampling_fn = get_fista_tv_solver(config, shape, inverse_scaler)
   else:
     raise ValueError(f"CS solver name {cs_solver} unknown.")
 
