@@ -100,6 +100,18 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
     t = 1.0
     L = 1.0
     
+    # Debug: Check initial state
+    print(f"\n[DEBUG] Initial state (after adjoint + clip):")
+    print(f"  x range: min={float(x.min()):.4f}, max={float(x.max()):.4f}, mean={float(x.mean()):.4f}")
+    initial_psnr = compute_psnr(x, ground_truth)
+    print(f"  Initial PSNR: {initial_psnr:.2f} dB")
+    
+    # Check if forward(x) ≈ measurements
+    forward_x = forward(x)
+    residual = forward_x - measurements
+    residual_norm = float(jnp.sqrt(jnp.mean(jnp.abs(residual)**2)))
+    print(f"  Forward-measurements residual norm: {residual_norm:.6f}")
+    
     objectives = []
     data_fidelities = []
     tv_values = []
@@ -111,9 +123,29 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
     for i in range(max_iter):
         # FISTA step
         grad = adjoint(forward(y) - measurements)
+        
+        # Debug first iteration
+        if i == 0:
+            print(f"\n[DEBUG] First iteration breakdown:")
+            print(f"  y (input): min={float(y.min()):.4f}, max={float(y.max()):.4f}, mean={float(y.mean()):.4f}")
+            print(f"  forward(y) residual: {float(jnp.sqrt(jnp.mean(jnp.abs(forward(y) - measurements)**2))):.6f}")
+            print(f"  grad: min={float(grad.min()):.4f}, max={float(grad.max()):.4f}, norm={float(jnp.sqrt(jnp.mean(grad**2))):.6f}")
+        
         x_new = y - (1.0 / L) * grad
+        
+        if i == 0:
+            print(f"  after gradient step: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
+            
         x_new = tv_prox_gd(x_new, lambda_tv / L, num_steps=tv_prox_steps, step_size=tv_prox_lr)
+        
+        if i == 0:
+            print(f"  after TV prox: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
+            
         x_new = jnp.clip(x_new, 0, 1)
+        
+        if i == 0:
+            print(f"  after clip: min={float(x_new.min()):.4f}, max={float(x_new.max()):.4f}")
+            print(f"  PSNR: {compute_psnr(x_new, ground_truth):.2f} dB\n")
         
         # Compute metrics
         if i % print_every == 0 or i == max_iter - 1:
