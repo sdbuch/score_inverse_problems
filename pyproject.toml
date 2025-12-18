@@ -27,3 +27,4 @@ dependencies = [
 
 [tool.uv]
 find-links = ["https://storage.googleapis.com/jax-releases/jax_releases.html"]
+override-dependencies = ["typing-extensions>=4.0.0"]
