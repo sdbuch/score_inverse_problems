@@ -385,8 +385,8 @@ sdist = { url = "https://files.pythonhosted.org/packages/04/11/8043e6d63f016069a
 
 [[package]]
 name = "jaxlib"
-version = "0.1.69"
-source = { registry = "https://storage.googleapis.com/jax-releases/jax_releases.html" }
+version = "0.1.69+cuda111"
+source = { registry = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }
 dependencies = [
     { name = "absl-py" },
     { name = "flatbuffers" },
@@ -394,7 +394,7 @@ dependencies = [
     { name = "scipy" },
 ]
 wheels = [
-    { url = "https://storage.googleapis.com/jax-releases/nocuda/jaxlib-0.1.69-cp39-none-manylinux2010_x86_64.whl" },
+    { url = "https://storage.googleapis.com/jax-releases/cuda111/jaxlib-0.1.69+cuda111-cp39-none-manylinux2010_x86_64.whl" },
 ]
 
 [[package]]
@@ -997,7 +997,7 @@ requires-dist = [
     { name = "absl-py", specifier = "==0.12.0" },
     { name = "flax", git = "https://github.com/google/flax.git?rev=8b2e56e93602ff9fcd62647f28b8145e0e0c10a8" },
     { name = "jax", specifier = "==0.2.18" },
-    { name = "jaxlib", specifier = "==0.1.69" },
+    { name = "jaxlib", specifier = "==0.1.69+cuda111" },
     { name = "ml-collections", specifier = "==0.1.0" },
     { name = "odl" },
     { name = "piq" },

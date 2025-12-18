@@ -16,7 +16,7 @@ dependencies = [
     "absl-py==0.12.0",
     "flax @ git+https://github.com/google/flax.git@8b2e56e93602ff9fcd62647f28b8145e0e0c10a8",
     "jax==0.2.18",
-    "jaxlib==0.1.69",
+    "jaxlib==0.1.69+cuda111",
     "scikit-image",
     "odl",
     "piq",
@@ -26,5 +26,5 @@ dependencies = [
 ]
 
 [tool.uv]
-find-links = ["https://storage.googleapis.com/jax-releases/jax_releases.html"]
+find-links = ["https://storage.googleapis.com/jax-releases/jax_releases.html", "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"]
 override-dependencies = ["typing-extensions>=4.0.0"]
