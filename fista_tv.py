@@ -62,9 +62,10 @@ def tv_prox_gd(x, lambda_tv, num_steps=10, step_size=0.1):
     return z
 
 
-def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, 
-                   tv_prox_steps=5, tv_prox_lr=0.05):
-    """FISTA-TV solver for undersampled MRI reconstruction.
+@jax.jit
+def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=1000, 
+                   tv_prox_steps=50, tv_prox_lr=0.01):
+    """JIT-compiled FISTA-TV solver for undersampled MRI reconstruction.
 
     Solves: argmin_x (1/2)||A(x) - y||^2 + lambda_tv * TV(x)
     where A(x) = mask * FFT(x)
@@ -97,16 +98,16 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100,
         return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
 
     # Initialize with adjoint of measurements
-    x = adjoint(measurements)
-    x = jnp.clip(x, 0, 1)  # Project to [0, 1]
-
-    y = x
-    t = 1.0
+    x_init = adjoint(measurements)
+    x_init = jnp.clip(x_init, 0, 1)  # Project to [0, 1]
 
     # Lipschitz constant for masked FFT operator is 1 with ortho normalization
     L = 1.0
 
-    for i in range(max_iter):
+    # FISTA iteration as a single step function
+    def fista_step(i, state):
+        x, y, t = state
+        
         # Gradient of data fidelity term: A^T(A(y) - measurements)
         grad = adjoint(forward(y) - measurements)
 
@@ -121,12 +122,16 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100,
 
         # FISTA acceleration
         t_new = (1 + jnp.sqrt(1 + 4 * t**2)) / 2
-        y = x_new + ((t - 1) / t_new) * (x_new - x)
+        y_new = x_new + ((t - 1) / t_new) * (x_new - x)
 
-        x = x_new
-        t = t_new
+        return (x_new, y_new, t_new)
 
-    return x
+    # Run FISTA iterations using jax.lax.fori_loop (JIT-friendly)
+    initial_state = (x_init, x_init, 1.0)
+    final_state = jax.lax.fori_loop(0, max_iter, fista_step, initial_state)
+    x_final, _, _ = final_state
+
+    return x_final
 
 
 def get_fista_tv_solver(config, shape, inverse_scaler):
