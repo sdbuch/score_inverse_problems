@@ -190,16 +190,30 @@ def main():
     test_img_jax = jnp.array(test_img)
     img_complex = test_img_jax.astype(jnp.complex64)
     N = test_img.shape[-2] * test_img.shape[-1]
-    measurements = mask * fft(img_complex, center=True, norm=None) / jnp.sqrt(N)
+    
+    # Debug: Check FFT output
+    fft_img = fft(img_complex, center=True, norm=None) / jnp.sqrt(N)
+    print(f"  FFT output: min={float(jnp.abs(fft_img).min()):.4f}, max={float(jnp.abs(fft_img).max()):.4f}, mean={float(jnp.abs(fft_img).mean()):.4f}")
+    print(f"  Mask: min={float(mask.min()):.4f}, max={float(mask.max()):.4f}, sum={int(mask.sum())}, nonzero={int(jnp.count_nonzero(mask))}")
+    
+    measurements = mask * fft_img
+    print(f"  Measurements (after mask): min={float(jnp.abs(measurements).min()):.4f}, max={float(jnp.abs(measurements).max()):.4f}, nonzero={int(jnp.count_nonzero(measurements))}")
     
     # Test forward/adjoint operator consistency
     print("\nTesting forward/adjoint operator consistency...")
+    
+    # Test: Can we reconstruct from full FFT?
+    full_recon = (ifft(fft_img, center=True, norm=None) / jnp.sqrt(N)).real
+    full_recon_error = float(jnp.mean((full_recon - test_img_jax) ** 2))
+    print(f"  Full FFT round-trip error (MSE): {full_recon_error:.6e}")
+    print(f"  Full FFT round-trip PSNR: {-10 * np.log10(full_recon_error) if full_recon_error > 0 else 100.0:.2f} dB")
+    
     reconstructed_direct = (ifft(measurements, center=True, norm=None) / jnp.sqrt(N)).real
-    print(f"  Direct IFFT of measurements: min={float(reconstructed_direct.min()):.4f}, max={float(reconstructed_direct.max()):.4f}")
+    print(f"  Direct IFFT of measurements: min={float(reconstructed_direct.min()):.4f}, max={float(reconstructed_direct.max()):.4f}, mean={float(reconstructed_direct.mean()):.4f}")
     
     # Apply adjoint (should be similar to direct IFFT)
     reconstructed_adjoint = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
-    print(f"  Adjoint reconstruction: min={float(reconstructed_adjoint.min()):.4f}, max={float(reconstructed_adjoint.max()):.4f}")
+    print(f"  Adjoint reconstruction: min={float(reconstructed_adjoint.min()):.4f}, max={float(reconstructed_adjoint.max()):.4f}, mean={float(reconstructed_adjoint.mean()):.4f}")
     
     # Check if forward-adjoint gives back approximately the input
     test_forward = mask * fft(test_img_jax.astype(jnp.complex64), center=True, norm=None) / jnp.sqrt(N)
