@@ -203,16 +203,17 @@ def main():
     print("\nTesting forward/adjoint operator consistency...")
     
     # Test: Can we reconstruct from full FFT?
-    full_recon = (ifft(fft_img, center=True, norm=None) / jnp.sqrt(N)).real
+    # Note: With norm=None, IFFT already scales by 1/N, so we multiply by sqrt(N)
+    full_recon = (ifft(fft_img, center=True, norm=None) * jnp.sqrt(N)).real
     full_recon_error = float(jnp.mean((full_recon - test_img_jax) ** 2))
     print(f"  Full FFT round-trip error (MSE): {full_recon_error:.6e}")
     print(f"  Full FFT round-trip PSNR: {-10 * np.log10(full_recon_error) if full_recon_error > 0 else 100.0:.2f} dB")
     
-    reconstructed_direct = (ifft(measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    reconstructed_direct = (ifft(measurements, center=True, norm=None) * jnp.sqrt(N)).real
     print(f"  Direct IFFT of measurements: min={float(reconstructed_direct.min()):.4f}, max={float(reconstructed_direct.max()):.4f}, mean={float(reconstructed_direct.mean()):.4f}")
     
     # Apply adjoint (should be similar to direct IFFT)
-    reconstructed_adjoint = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    reconstructed_adjoint = (ifft(mask * measurements, center=True, norm=None) * jnp.sqrt(N)).real
     print(f"  Adjoint reconstruction: min={float(reconstructed_adjoint.min()):.4f}, max={float(reconstructed_adjoint.max()):.4f}, mean={float(reconstructed_adjoint.mean()):.4f}")
     
     # Check if forward-adjoint gives back approximately the input
@@ -232,7 +233,7 @@ def main():
     
     # Compute initial PSNR (zero-filled reconstruction)
     N = test_img.shape[-2] * test_img.shape[-1]
-    zero_filled = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    zero_filled = (ifft(mask * measurements, center=True, norm=None) * jnp.sqrt(N)).real
     zero_filled = jnp.clip(zero_filled, 0, 1)
     
     print(f"  Zero-filled: min={float(zero_filled.min()):.4f}, max={float(zero_filled.max()):.4f}, mean={float(zero_filled.mean()):.4f}")

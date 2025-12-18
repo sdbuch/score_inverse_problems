@@ -93,9 +93,11 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=1000,
 
     # Adjoint operator: A^T(y) = IFFT(mask * y)
     def adjoint(y):
-        # Use norm=None and scale accordingly
+        # With norm=None, IFFT scales by 1/N.
+        # For orthonormal (matching forward's 1/sqrt(N)), we multiply by sqrt(N)
+        # to get total scaling of 1/sqrt(N): (1/N) * sqrt(N) = 1/sqrt(N)
         N = mask.shape[-2] * mask.shape[-1]
-        return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
+        return (ifft(mask * y, center=True, norm=None) * jnp.sqrt(N)).real
 
     # Initialize with adjoint of measurements
     x_init = adjoint(measurements)
