@@ -14,6 +14,56 @@ and can be quickly adapted to different imaging processes at test time without m
 superior performance on sparse-view computed tomography (CT), magnetic resonance imaging (MRI), and metal artifact
 removal (MAR) in CT imaging.
 
+## GPU Setup with Conda/Mamba
+
+This repository requires old versions of JAX (0.2.18) and TensorFlow (2.5.0) that need CUDA 11 libraries. If your system has CUDA 12, follow these steps to set up a compatible environment:
+
+### 1. Install Miniforge/Mamba
+
+```bash
+# Download and install Miniforge
+curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b
+
+# Initialize conda
+~/miniforge3/bin/conda init bash
+source ~/.bashrc
+```
+
+### 2. Create Environment with CUDA 11
+
+```bash
+# Create environment with Python 3.9 and CUDA 11.8 libraries
+mamba create -n score_gpu python=3.9 cudatoolkit=11.8 cudnn -c conda-forge -y
+mamba activate score_gpu
+```
+
+### 3. Install Dependencies
+
+```bash
+# Install uv and project dependencies
+pip install uv
+uv sync --reinstall-package jaxlib
+
+# Export library path so Python can find CUDA libraries
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+```
+
+### 4. Run Evaluation
+
+```bash
+# Use specific GPU(s) - e.g., GPU 6 only
+CUDA_VISIBLE_DEVICES=6 python main.py \
+  --config=configs/ve/brats_ncsnpp_continuous.py \
+  --workdir=./exp/brats_ncsnpp_ve \
+  --mode=eval \
+  --eval_folder=eval_test
+```
+
+**Note:** The code automatically uses all visible GPUs via JAX's `pmap`. Use `CUDA_VISIBLE_DEVICES` to control which GPUs are used.
+
+--------------------
+
 ### Dependencies
 
 See `requirements.txt`.
