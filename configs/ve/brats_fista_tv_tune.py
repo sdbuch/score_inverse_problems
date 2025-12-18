@@ -1,19 +1,12 @@
 # coding=utf-8
-# Copyright 2020 The Google Research Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""FISTA-TV with tunable hyperparameters for BraTS MRI reconstruction.
 
-"""FISTA-TV baseline for BraTS MRI reconstruction."""
+Hyperparameters to tune:
+- lambda_tv: TV regularization weight (0.0001 to 0.01)
+- fista_max_iter: Number of FISTA iterations (50 to 200)
+- tv_prox_steps: Number of gradient descent steps in TV prox (3 to 10)
+- tv_prox_lr: Step size for TV proximal operator (0.01 to 0.1)
+"""
 
 from configs.default_cs_configs import get_default_configs
 
@@ -32,19 +25,35 @@ def get_config():
   evaluate = config.eval
   evaluate.batch_size = 128  # Can process in parallel
   evaluate.num_samples = 50000
-  evaluate.ckpt_id = 26  # Not used for FISTA-TV (no checkpoint needed)
+  evaluate.ckpt_id = 26  # Not used for FISTA-TV
   
   # sampling
   sampling = config.sampling
   sampling.n_projections = 30  # 8× acceleration (240/30 = 8)
   sampling.task = 'mri'
-  sampling.cs_solver = 'fista_tv'  # Use FISTA-TV solver
+  sampling.cs_solver = 'fista_tv'
   
-  # FISTA-TV specific parameters
-  sampling.lambda_tv = 0.001  # TV regularization parameter (from paper)
-  sampling.fista_max_iter = 1000  # Maximum FISTA iterations (increased for better convergence)
-  sampling.tv_prox_steps = 50  # TV proximal operator steps (based on CCPi without warm start)
-  sampling.tv_prox_lr = 0.01  # TV proximal operator step size
+  # ========================================
+  # TUNABLE HYPERPARAMETERS
+  # ========================================
+  
+  # TV regularization weight (higher = smoother)
+  # Recommended range: [0.0001, 0.001, 0.01]
+  sampling.lambda_tv = 0.001
+  
+  # Number of FISTA iterations
+  # Recommended range: [500, 1000, 2000] - Based on CCPi defaults
+  # For quick testing: [100, 200]
+  sampling.fista_max_iter = 1000
+  
+  # TV proximal operator: number of gradient descent steps
+  # Recommended range: [20, 50, 100] - Based on CCPi FGP_TV without warm start
+  # For quick testing: [10, 20]
+  sampling.tv_prox_steps = 50
+  
+  # TV proximal operator: step size
+  # Recommended range: [0.005, 0.01, 0.02]
+  sampling.tv_prox_lr = 0.01
   
   # data
   data = config.data

@@ -62,7 +62,8 @@ def tv_prox_gd(x, lambda_tv, num_steps=10, step_size=0.1):
     return z
 
 
-def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, tol=1e-6):
+def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, 
+                   tv_prox_steps=5, tv_prox_lr=0.05):
     """FISTA-TV solver for undersampled MRI reconstruction.
 
     Solves: argmin_x (1/2)||A(x) - y||^2 + lambda_tv * TV(x)
@@ -73,7 +74,8 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, tol=1e-6):
         mask: Undersampling mask
         lambda_tv: TV regularization parameter
         max_iter: Maximum number of FISTA iterations
-        tol: Convergence tolerance
+        tv_prox_steps: Number of gradient descent steps in TV proximal operator
+        tv_prox_lr: Step size for TV proximal operator
 
     Returns:
         Reconstructed image (real-valued)
@@ -111,8 +113,8 @@ def fista_tv_solve(measurements, mask, lambda_tv=0.001, max_iter=100, tol=1e-6):
         # Gradient descent step
         x_new = y - (1.0 / L) * grad
 
-        # TV proximal operator
-        x_new = tv_prox_gd(x_new, lambda_tv / L, num_steps=5, step_size=0.05)
+        # TV proximal operator with tunable parameters
+        x_new = tv_prox_gd(x_new, lambda_tv / L, num_steps=tv_prox_steps, step_size=tv_prox_lr)
 
         # Ensure valid range
         x_new = jnp.clip(x_new, 0, 1)
@@ -140,10 +142,11 @@ def get_fista_tv_solver(config, shape, inverse_scaler):
     """
     from cs import get_masks
 
-    # Lambda_tv will be passed as a hyperparameter
-    # Default value can be overridden in config
+    # Get hyperparameters from config with defaults
     lambda_tv_default = getattr(config.sampling, "lambda_tv", 0.001)
     max_iter = getattr(config.sampling, "fista_max_iter", 100)
+    tv_prox_steps = getattr(config.sampling, "tv_prox_steps", 5)
+    tv_prox_lr = getattr(config.sampling, "tv_prox_lr", 0.05)
 
     def solver(rng, pstate, img, lambda_tv=None):
         """FISTA-TV solver function.
@@ -184,7 +187,11 @@ def get_fista_tv_solver(config, shape, inverse_scaler):
 
             # Solve
             reconstructed = fista_tv_solve(
-                measurement, mask_template, lambda_tv=lambda_tv, max_iter=max_iter
+                measurement, mask_template, 
+                lambda_tv=lambda_tv, 
+                max_iter=max_iter,
+                tv_prox_steps=tv_prox_steps,
+                tv_prox_lr=tv_prox_lr
             )
 
             return reconstructed[..., None]  # Add channel dimension back
