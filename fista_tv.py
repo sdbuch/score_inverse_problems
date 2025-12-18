@@ -37,9 +37,8 @@ def tv_prox_gd(x, lambda_tv, num_steps=10, step_size=0.1):
     Returns:
         Denoised image
     """
-    z = x
-
-    for _ in range(num_steps):
+    def tv_step(i, z):
+        """Single TV gradient descent step."""
         # Compute gradient of TV
         grad_x = jnp.diff(z, axis=-2, append=z[..., -1:, :])
         grad_y = jnp.diff(z, axis=-1, append=z[..., :, -1:])
@@ -57,8 +56,11 @@ def tv_prox_gd(x, lambda_tv, num_steps=10, step_size=0.1):
         grad_tv = -(div_x + div_y)
 
         # Gradient descent step
-        z = z - step_size * ((z - x) + lambda_tv * grad_tv)
+        z_new = z - step_size * ((z - x) + lambda_tv * grad_tv)
+        return z_new
 
+    # Use fori_loop for JIT compatibility
+    z = jax.lax.fori_loop(0, num_steps, tv_step, x)
     return z
 
 
