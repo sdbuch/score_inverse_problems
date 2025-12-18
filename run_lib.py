@@ -453,13 +453,16 @@ def evaluate(config, workdir, eval_folder="eval"):
         config, sde, score_model, sampling_shape, inverse_scaler, eps=sampling_eps
     )
 
-    hyper_params = {
-        "projection": [config.sampling.coeff, config.sampling.snr],
-        "langevin_projection": [config.sampling.coeff, config.sampling.snr],
-        "langevin": [config.sampling.projection_sigma_rate, config.sampling.snr],
-        "baseline": [config.sampling.projection_sigma_rate, config.sampling.snr],
-        "fista_tv": [config.sampling.lambda_tv],  # TV regularization parameter
-    }[config.sampling.cs_solver]
+    # Get hyperparameters for the specific solver (avoid eager evaluation of all configs)
+    solver_name = config.sampling.cs_solver.lower()
+    if solver_name in ("projection", "langevin_projection"):
+        hyper_params = [config.sampling.coeff, config.sampling.snr]
+    elif solver_name in ("langevin", "baseline"):
+        hyper_params = [config.sampling.projection_sigma_rate, config.sampling.snr]
+    elif solver_name == "fista_tv":
+        hyper_params = [config.sampling.lambda_tv]
+    else:
+        raise ValueError(f"Unknown solver: {solver_name}")
 
     per_host_batch_size = config.eval.batch_size // jax.host_count()
     num_batches = int(np.ceil(len(test_imgs) / per_host_batch_size))
