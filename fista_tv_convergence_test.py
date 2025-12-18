@@ -82,11 +82,16 @@ def fista_tv_with_monitoring(measurements, mask, ground_truth, lambda_tv=0.001, 
         return (ifft(mask * y, center=True, norm=None) / jnp.sqrt(N)).real
     
     def compute_psnr(x, gt):
-        """Compute PSNR against ground truth."""
+        """Compute PSNR against ground truth.
+        
+        PSNR = -10 * log10(MSE) where MSE = mean((x - gt)^2)
+        Assumes both x and gt are in [0, 1] range.
+        """
         mse = float(jnp.mean((x - gt) ** 2))
         if mse < 1e-10:
             return 100.0  # Perfect reconstruction
-        return -10 * np.log10(mse)
+        psnr = -10 * np.log10(mse)
+        return psnr
     
     # Initialize
     x = adjoint(measurements)
@@ -156,7 +161,7 @@ def main():
     print(f"  max_iter:        {args.max_iter}")
     print(f"  tv_prox_steps:   {args.tv_prox_steps}")
     print(f"  tv_prox_lr:      {args.tv_prox_lr}")
-    print(f"  n_projections:   {args.n_projections} ({args.image_size / args.n_projections:.1f}× acceleration)")
+    print(f"  n_projections:   {args.n_projections} ({args.image_size / args.n_projections:.1f}� acceleration)")
     print("=" * 70)
     
     # Load one BraTS test image
@@ -187,13 +192,41 @@ def main():
     N = test_img.shape[-2] * test_img.shape[-1]
     measurements = mask * fft(img_complex, center=True, norm=None) / jnp.sqrt(N)
     
+    # Test forward/adjoint operator consistency
+    print("\nTesting forward/adjoint operator consistency...")
+    reconstructed_direct = (ifft(measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    print(f"  Direct IFFT of measurements: min={float(reconstructed_direct.min()):.4f}, max={float(reconstructed_direct.max()):.4f}")
+    
+    # Apply adjoint (should be similar to direct IFFT)
+    reconstructed_adjoint = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
+    print(f"  Adjoint reconstruction: min={float(reconstructed_adjoint.min()):.4f}, max={float(reconstructed_adjoint.max()):.4f}")
+    
+    # Check if forward-adjoint gives back approximately the input
+    test_forward = mask * fft(test_img_jax.astype(jnp.complex64), center=True, norm=None) / jnp.sqrt(N)
+    test_back = (ifft(mask * test_forward, center=True, norm=None) / jnp.sqrt(N)).real
+    forward_adjoint_error = float(jnp.mean((test_back - test_img_jax) ** 2))
+    print(f"  Forward-adjoint error (MSE): {forward_adjoint_error:.6e}")
+    print(f"  Forward-adjoint PSNR: {-10 * np.log10(forward_adjoint_error) if forward_adjoint_error > 0 else 100.0:.2f} dB")
+    
+    if forward_adjoint_error > 0.01:
+        print("  ??  WARNING: Large forward-adjoint error! Operators may be inconsistent.")
+    
+    # Debugging: Check data ranges
+    print(f"\nData range checks:")
+    print(f"  Ground truth: min={float(test_img_jax.min()):.4f}, max={float(test_img_jax.max()):.4f}, mean={float(test_img_jax.mean()):.4f}")
+    print(f"  Measurements: min={float(jnp.abs(measurements).min()):.4f}, max={float(jnp.abs(measurements).max()):.4f}")
+    
     # Compute initial PSNR (zero-filled reconstruction)
     N = test_img.shape[-2] * test_img.shape[-1]
     zero_filled = (ifft(mask * measurements, center=True, norm=None) / jnp.sqrt(N)).real
     zero_filled = jnp.clip(zero_filled, 0, 1)
+    
+    print(f"  Zero-filled: min={float(zero_filled.min()):.4f}, max={float(zero_filled.max()):.4f}, mean={float(zero_filled.mean()):.4f}")
+    
     zero_filled_mse = float(jnp.mean((zero_filled - test_img_jax) ** 2))
-    zero_filled_psnr = -10 * np.log10(zero_filled_mse)
-    print(f"Initial (zero-filled) PSNR: {zero_filled_psnr:.2f} dB")
+    zero_filled_psnr = -10 * np.log10(zero_filled_mse) if zero_filled_mse > 0 else 100.0
+    print(f"\nInitial (zero-filled) PSNR: {zero_filled_psnr:.2f} dB")
+    print(f"  MSE: {zero_filled_mse:.6f}")
     
     # Run FISTA-TV with monitoring
     print("\nRunning FISTA-TV...\n")
@@ -217,23 +250,33 @@ def main():
         
         # Check if converged
         if final_rel_change < 1e-6:
-            print("✓ CONVERGED (rel_change < 1e-6)")
+            print("? CONVERGED (rel_change < 1e-6)")
         elif final_rel_change < 1e-4:
-            print("⚠ Nearly converged (rel_change < 1e-4)")
+            print("? Nearly converged (rel_change < 1e-4)")
         else:
-            print("✗ NOT CONVERGED - Consider increasing max_iter")
+            print("? NOT CONVERGED - Consider increasing max_iter")
     
     print(f"\nFinal objective value: {objectives[-1]:.6f}")
     print(f"  Data fidelity: {data_fidelities[-1]:.6f}")
     print(f"  TV term:       {tv_values[-1]:.6f}")
     
     # Compute reconstruction quality
+    print(f"\nFinal reconstruction range: min={float(reconstructed.min()):.4f}, max={float(reconstructed.max()):.4f}, mean={float(reconstructed.mean()):.4f}")
+    
     mse = float(jnp.mean((reconstructed - test_img_jax) ** 2))
     psnr = psnrs[-1]  # Use the last computed PSNR
     print(f"\nReconstruction quality vs Ground Truth:")
-    print(f"  Initial (zero-filled): {zero_filled_psnr:.2f} dB")
-    print(f"  Final (FISTA-TV):      {psnr:.2f} dB")
+    print(f"  Initial (zero-filled): {zero_filled_psnr:.2f} dB (MSE: {zero_filled_mse:.6f})")
+    print(f"  Final (FISTA-TV):      {psnr:.2f} dB (MSE: {mse:.6f})")
     print(f"  Improvement:           {psnr - zero_filled_psnr:.2f} dB")
+    
+    # Check if something went wrong
+    if psnr < zero_filled_psnr:
+        print("\n??  WARNING: FISTA-TV worse than zero-filled! Something may be wrong.")
+        print("     Possible issues:")
+        print("     - lambda_tv too high (oversmoothing)")
+        print("     - TV prox not converging (try more tv_prox_steps)")
+        print("     - Bug in forward/adjoint operators")
     
     # PSNR progression
     if len(psnrs) > 1:
