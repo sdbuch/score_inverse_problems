@@ -49,7 +49,8 @@ class Brats(tfds.core.GeneratorBasedBuilder):
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     """Returns SplitGenerators."""
-    train_path = '/raid/song/BraTS/training'
+    # Use environment variable or default to local path
+    train_path = os.environ.get('BRATS_DATA_PATH', './data/BraTS/training')
     return {
       'train': self._generate_examples(train_path),
     }
